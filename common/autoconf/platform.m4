@@ -96,6 +96,12 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_CPU],
       VAR_CPU_BITS=64
       VAR_CPU_ENDIAN=big
       ;;
+    wasm32)
+      VAR_CPU=wasm32
+      VAR_CPU_ARCH=x86
+      VAR_CPU_BITS=32
+      VAR_CPU_ENDIAN=little
+      ;;
     *)
       AC_MSG_ERROR([unsupported cpu $1])
       ;;
@@ -142,6 +148,11 @@ AC_DEFUN([PLATFORM_EXTRACT_VARS_FROM_OS],
       VAR_OS=aix
       VAR_OS_API=posix
       VAR_OS_ENV=aix
+      ;;
+    *emscripten*)
+      VAR_OS=emscripten
+      VAR_OS_API=emscriptenapi
+      VAR_OS_ENV=linux
       ;;
     *)
       AC_MSG_ERROR([unsupported operating system $1])
@@ -395,6 +406,10 @@ AC_DEFUN([PLATFORM_SET_RELEASE_FILE_OS_VALUES],
   if test "x$OPENJDK_TARGET_OS" = "xlinux"; then
     REQUIRED_OS_NAME=Linux
     REQUIRED_OS_VERSION=2.6
+  fi
+  if test "x$OPENJDK_TARGET_OS" = "xemscripten"; then
+    REQUIRED_OS_NAME=Emscripten
+    REQUIRED_OS_VERSION=*.*.*
   fi
   if test "x$OPENJDK_TARGET_OS" = "xwindows"; then
     REQUIRED_OS_NAME=Windows

@@ -34,16 +34,17 @@
 
 
 # All valid toolchains, regardless of platform (used by help.m4)
-VALID_TOOLCHAINS_all="gcc clang solstudio xlc microsoft"
+VALID_TOOLCHAINS_all="gcc clang emscripten solstudio xlc microsoft"
 
 # These toolchains are valid on different platforms
-VALID_TOOLCHAINS_linux="gcc clang"
-VALID_TOOLCHAINS_solaris="solstudio"
+VALID_TOOLCHAINS_linux="gcc clang emscripten"
+VALID_TOOLCHAINS_solaris="solstudio emscripten"
 VALID_TOOLCHAINS_macosx="gcc clang"
-VALID_TOOLCHAINS_aix="xlc"
+VALID_TOOLCHAINS_aix="xlc emscripten"
 VALID_TOOLCHAINS_windows="microsoft"
 
 # Toolchain descriptions
+TOOLCHAIN_DESCRIPTION_emscripten="Emscripten Compiler"
 TOOLCHAIN_DESCRIPTION_clang="clang/LLVM"
 TOOLCHAIN_DESCRIPTION_gcc="GNU Compiler Collection"
 TOOLCHAIN_DESCRIPTION_microsoft="Microsoft Visual Studio"
@@ -150,6 +151,8 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
   toolchain_var_name=VALID_TOOLCHAINS_$OPENJDK_BUILD_OS
   VALID_TOOLCHAINS=${!toolchain_var_name}
  
+  AC_MSG_NOTICE([OpenJDK Target OS: $OPENJDK_TARGET_OS])
+
   if test "x$OPENJDK_TARGET_OS" = xmacosx; then
     # On Mac OS X, default toolchain to clang after Xcode 5
     XCODE_VERSION_OUTPUT=`xcodebuild -version 2>&1 | $HEAD -n 1`
@@ -166,6 +169,8 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
     else
         DEFAULT_TOOLCHAIN="gcc"
     fi
+  elif test "x$OPENJDK_TARGET_OS" = xemscripten; then
+    DEFAULT_TOOLCHAIN="emscripten"
   else
     # First toolchain type in the list is the default
     DEFAULT_TOOLCHAIN=${VALID_TOOLCHAINS%% *}
@@ -195,12 +200,14 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
   fi
   AC_SUBST(TOOLCHAIN_TYPE)
 
+  TOOLCHAIN_CC_BINARY_emscripten="emcc"
   TOOLCHAIN_CC_BINARY_clang="clang"
   TOOLCHAIN_CC_BINARY_gcc="gcc"
   TOOLCHAIN_CC_BINARY_microsoft="cl"
   TOOLCHAIN_CC_BINARY_solstudio="cc"
   TOOLCHAIN_CC_BINARY_xlc="xlc_r"
 
+  TOOLCHAIN_CXX_BINARY_emscripten="em++"
   TOOLCHAIN_CXX_BINARY_clang="clang++"
   TOOLCHAIN_CXX_BINARY_gcc="g++"
   TOOLCHAIN_CXX_BINARY_microsoft="cl"
@@ -455,6 +462,25 @@ AC_DEFUN([TOOLCHAIN_EXTRACT_COMPILER_VERSION],
         $SED -e 's/ *Copyright .*//'`
     COMPILER_VERSION_NUMBER=`$ECHO $COMPILER_VERSION_OUTPUT | \
         $SED -e 's/^.* \(@<:@1-9@:>@@<:@0-9@:>@*\.@<:@0-9.@:>@*\) .*$/\1/'`
+elif test  "x$TOOLCHAIN_TYPE" = xemscripten; then
+    # emcc --version output typically looks like
+    #     emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.26 (8eaf19f1c6a9a1b0cd0f9a91657366829e34ae5c)
+    #     Copyright (C) 2014 the Emscripten authors (see AUTHORS.txt)
+    #     This is free and open source software under the MIT license.
+    #     There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    COMPILER_VERSION_OUTPUT=`$COMPILER --version 2>&1`
+    # Check that this is likely to be Emscripten.
+    $ECHO "$COMPILER_VERSION_OUTPUT" | $GREP "the Emscripten authors" > /dev/null
+    if test $? -ne 0; then
+      AC_MSG_NOTICE([The $COMPILER_NAME compiler (located as $COMPILER) does not seem to be the required $TOOLCHAIN_TYPE compiler.])
+      AC_MSG_NOTICE([The result from running with --version was: "$COMPILER_VERSION"])
+      AC_MSG_ERROR([A $TOOLCHAIN_TYPE compiler is required. Try setting --with-tools-dir.])
+    fi
+    # Remove Copyright and legalese from version string, and
+    # collapse into a single line
+    COMPILER_VERSION_STRING='emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) *.*.* (*)'
+    COMPILER_VERSION_NUMBER='*.*.*'
   elif test  "x$TOOLCHAIN_TYPE" = xclang; then
     # clang --version output typically looks like
     #    Apple LLVM version 5.0 (clang-500.2.79) (based on LLVM 3.3svn)
@@ -767,11 +793,11 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
     # If we do that, we can do this detection before POST_DETECTION, and still
     # find the build compilers in the tools dir, if needed.
     if test "x$OPENJDK_BUILD_OS" = xmacosx; then
-      BASIC_PATH_PROGS(BUILD_CC, [clang cl cc gcc])
-      BASIC_PATH_PROGS(BUILD_CXX, [clang++ cl CC g++])
+      BASIC_PATH_PROGS(BUILD_CC, [clang cl cc gcc emcc])
+      BASIC_PATH_PROGS(BUILD_CXX, [clang++ cl CC g++ em++])
     else
-      BASIC_REQUIRE_PROGS(BUILD_CC, [cl cc gcc])
-      BASIC_REQUIRE_PROGS(BUILD_CXX, [cl CC g++])
+      BASIC_REQUIRE_PROGS(BUILD_CC, [cl cc gcc emcc])
+      BASIC_REQUIRE_PROGS(BUILD_CXX, [cl CC g++ em++])
     fi
     BASIC_FIXUP_EXECUTABLE(BUILD_CC)
     BASIC_FIXUP_EXECUTABLE(BUILD_CXX)
@@ -810,7 +836,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_LEGACY],
   AC_SUBST(HOTSPOT_CXX)
   AC_SUBST(HOTSPOT_LD)
 
-  if test  "x$TOOLCHAIN_TYPE" = xclang; then
+  if test "x$TOOLCHAIN_TYPE" = xclang || test "x$TOOLCHAIN_TYPE" = xemscripten; then
     USE_CLANG=true
   fi
   AC_SUBST(USE_CLANG)

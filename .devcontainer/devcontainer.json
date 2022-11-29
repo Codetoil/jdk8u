@@ -1,0 +1,13 @@
+{
+    "image": "mcr.microsoft.com/devcontainers/universal:2",
+    "containerEnv": {
+      "JAVA_HOME": "/usr/lib/jvm/java-8-openjdk-amd64"
+    },
+    "customizations": {
+      "vscode": {"extensions": [
+              "vscjava.vscode-java-pack",
+              "DavidAnson.vscode-markdownlint",
+              "eamodio.gitlens"
+          ]}
+    }
+  }

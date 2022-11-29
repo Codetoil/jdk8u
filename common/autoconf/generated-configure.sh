@@ -4184,16 +4184,17 @@ fi
 
 
 # All valid toolchains, regardless of platform (used by help.m4)
-VALID_TOOLCHAINS_all="gcc clang solstudio xlc microsoft"
+VALID_TOOLCHAINS_all="gcc clang emscripten solstudio xlc microsoft"
 
 # These toolchains are valid on different platforms
-VALID_TOOLCHAINS_linux="gcc clang"
-VALID_TOOLCHAINS_solaris="solstudio"
+VALID_TOOLCHAINS_linux="gcc clang emscripten"
+VALID_TOOLCHAINS_solaris="solstudio emscripten"
 VALID_TOOLCHAINS_macosx="gcc clang"
-VALID_TOOLCHAINS_aix="xlc"
+VALID_TOOLCHAINS_aix="xlc emscripten"
 VALID_TOOLCHAINS_windows="microsoft"
 
 # Toolchain descriptions
+TOOLCHAIN_DESCRIPTION_emscripten="Emscripten Compiler"
 TOOLCHAIN_DESCRIPTION_clang="clang/LLVM"
 TOOLCHAIN_DESCRIPTION_gcc="GNU Compiler Collection"
 TOOLCHAIN_DESCRIPTION_microsoft="Microsoft Visual Studio"
@@ -4417,7 +4418,7 @@ VS_TOOLSET_SUPPORTED_2019=false
 #CUSTOM_AUTOCONF_INCLUDE
 
 # Do not change or remove the following line, it is needed for consistency checks:
-DATE_WHEN_GENERATED=1652838310
+DATE_WHEN_GENERATED=1669247488
 
 ###############################################################################
 #
@@ -13647,6 +13648,11 @@ test -n "$target_alias" &&
       VAR_OS_API=posix
       VAR_OS_ENV=aix
       ;;
+    *emscripten*)
+      VAR_OS=emscripten
+      VAR_OS_API=emscriptenapi
+      VAR_OS_ENV=linux
+      ;;
     *)
       as_fn_error $? "unsupported operating system $build_os" "$LINENO" 5
       ;;
@@ -13721,6 +13727,12 @@ test -n "$target_alias" &&
       VAR_CPU_BITS=64
       VAR_CPU_ENDIAN=big
       ;;
+    wasm32)
+      VAR_CPU=wasm32
+      VAR_CPU_ARCH=x86
+      VAR_CPU_BITS=32
+      VAR_CPU_ENDIAN=little
+      ;;
     *)
       as_fn_error $? "unsupported cpu $build_cpu" "$LINENO" 5
       ;;
@@ -13784,6 +13796,11 @@ $as_echo "$OPENJDK_BUILD_OS-$OPENJDK_BUILD_CPU" >&6; }
       VAR_OS=aix
       VAR_OS_API=posix
       VAR_OS_ENV=aix
+      ;;
+    *emscripten*)
+      VAR_OS=emscripten
+      VAR_OS_API=emscriptenapi
+      VAR_OS_ENV=linux
       ;;
     *)
       as_fn_error $? "unsupported operating system $host_os" "$LINENO" 5
@@ -13858,6 +13875,12 @@ $as_echo "$OPENJDK_BUILD_OS-$OPENJDK_BUILD_CPU" >&6; }
       VAR_CPU_ARCH=sparc
       VAR_CPU_BITS=64
       VAR_CPU_ENDIAN=big
+      ;;
+    wasm32)
+      VAR_CPU=wasm32
+      VAR_CPU_ARCH=x86
+      VAR_CPU_BITS=32
+      VAR_CPU_ENDIAN=little
       ;;
     *)
       as_fn_error $? "unsupported cpu $host_cpu" "$LINENO" 5
@@ -13945,6 +13968,10 @@ $as_echo "$COMPILE_TYPE" >&6; }
   if test "x$OPENJDK_TARGET_OS" = "xlinux"; then
     REQUIRED_OS_NAME=Linux
     REQUIRED_OS_VERSION=2.6
+  fi
+  if test "x$OPENJDK_TARGET_OS" = "xemscripten"; then
+    REQUIRED_OS_NAME=Emscripten
+    REQUIRED_OS_VERSION=*.*.*
   fi
   if test "x$OPENJDK_TARGET_OS" = "xwindows"; then
     REQUIRED_OS_NAME=Windows
@@ -25577,6 +25604,9 @@ fi
   toolchain_var_name=VALID_TOOLCHAINS_$OPENJDK_BUILD_OS
   VALID_TOOLCHAINS=${!toolchain_var_name}
 
+  { $as_echo "$as_me:${as_lineno-$LINENO}: OpenJDK Target OS: $OPENJDK_TARGET_OS" >&5
+$as_echo "$as_me: OpenJDK Target OS: $OPENJDK_TARGET_OS" >&6;}
+
   if test "x$OPENJDK_TARGET_OS" = xmacosx; then
     # On Mac OS X, default toolchain to clang after Xcode 5
     XCODE_VERSION_OUTPUT=`xcodebuild -version 2>&1 | $HEAD -n 1`
@@ -25594,6 +25624,8 @@ $as_echo "$as_me: Xcode major version: $XCODE_MAJOR_VERSION" >&6;}
     else
         DEFAULT_TOOLCHAIN="gcc"
     fi
+  elif test "x$OPENJDK_TARGET_OS" = xemscripten; then
+    DEFAULT_TOOLCHAIN="emscripten"
   else
     # First toolchain type in the list is the default
     DEFAULT_TOOLCHAIN=${VALID_TOOLCHAINS%% *}
@@ -25626,12 +25658,14 @@ $as_echo "$as_me: Valid toolchains: $VALID_TOOLCHAINS." >&6;}
   fi
 
 
+  TOOLCHAIN_CC_BINARY_emscripten="emcc"
   TOOLCHAIN_CC_BINARY_clang="clang"
   TOOLCHAIN_CC_BINARY_gcc="gcc"
   TOOLCHAIN_CC_BINARY_microsoft="cl"
   TOOLCHAIN_CC_BINARY_solstudio="cc"
   TOOLCHAIN_CC_BINARY_xlc="xlc_r"
 
+  TOOLCHAIN_CXX_BINARY_emscripten="em++"
   TOOLCHAIN_CXX_BINARY_clang="clang++"
   TOOLCHAIN_CXX_BINARY_gcc="g++"
   TOOLCHAIN_CXX_BINARY_microsoft="cl"
@@ -28239,6 +28273,27 @@ $as_echo "$as_me: The result from running with --version was: \"$COMPILER_VERSIO
         $SED -e 's/ *Copyright .*//'`
     COMPILER_VERSION_NUMBER=`$ECHO $COMPILER_VERSION_OUTPUT | \
         $SED -e 's/^.* \([1-9][0-9]*\.[0-9.]*\) .*$/\1/'`
+elif test  "x$TOOLCHAIN_TYPE" = xemscripten; then
+    # emcc --version output typically looks like
+    #     emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.26 (8eaf19f1c6a9a1b0cd0f9a91657366829e34ae5c)
+    #     Copyright (C) 2014 the Emscripten authors (see AUTHORS.txt)
+    #     This is free and open source software under the MIT license.
+    #     There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    COMPILER_VERSION_OUTPUT=`$COMPILER --version 2>&1`
+    # Check that this is likely to be Emscripten.
+    $ECHO "$COMPILER_VERSION_OUTPUT" | $GREP "the Emscripten authors" > /dev/null
+    if test $? -ne 0; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: The $COMPILER_NAME compiler (located as $COMPILER) does not seem to be the required $TOOLCHAIN_TYPE compiler." >&5
+$as_echo "$as_me: The $COMPILER_NAME compiler (located as $COMPILER) does not seem to be the required $TOOLCHAIN_TYPE compiler." >&6;}
+      { $as_echo "$as_me:${as_lineno-$LINENO}: The result from running with --version was: \"$COMPILER_VERSION\"" >&5
+$as_echo "$as_me: The result from running with --version was: \"$COMPILER_VERSION\"" >&6;}
+      as_fn_error $? "A $TOOLCHAIN_TYPE compiler is required. Try setting --with-tools-dir." "$LINENO" 5
+    fi
+    # Remove Copyright and legalese from version string, and
+    # collapse into a single line
+    COMPILER_VERSION_STRING='emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) *.*.* (*)'
+    COMPILER_VERSION_NUMBER='*.*.*'
   elif test  "x$TOOLCHAIN_TYPE" = xclang; then
     # clang --version output typically looks like
     #    Apple LLVM version 5.0 (clang-500.2.79) (based on LLVM 3.3svn)
@@ -29980,6 +30035,27 @@ $as_echo "$as_me: The result from running with --version was: \"$COMPILER_VERSIO
         $SED -e 's/ *Copyright .*//'`
     COMPILER_VERSION_NUMBER=`$ECHO $COMPILER_VERSION_OUTPUT | \
         $SED -e 's/^.* \([1-9][0-9]*\.[0-9.]*\) .*$/\1/'`
+elif test  "x$TOOLCHAIN_TYPE" = xemscripten; then
+    # emcc --version output typically looks like
+    #     emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.26 (8eaf19f1c6a9a1b0cd0f9a91657366829e34ae5c)
+    #     Copyright (C) 2014 the Emscripten authors (see AUTHORS.txt)
+    #     This is free and open source software under the MIT license.
+    #     There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+    COMPILER_VERSION_OUTPUT=`$COMPILER --version 2>&1`
+    # Check that this is likely to be Emscripten.
+    $ECHO "$COMPILER_VERSION_OUTPUT" | $GREP "the Emscripten authors" > /dev/null
+    if test $? -ne 0; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: The $COMPILER_NAME compiler (located as $COMPILER) does not seem to be the required $TOOLCHAIN_TYPE compiler." >&5
+$as_echo "$as_me: The $COMPILER_NAME compiler (located as $COMPILER) does not seem to be the required $TOOLCHAIN_TYPE compiler." >&6;}
+      { $as_echo "$as_me:${as_lineno-$LINENO}: The result from running with --version was: \"$COMPILER_VERSION\"" >&5
+$as_echo "$as_me: The result from running with --version was: \"$COMPILER_VERSION\"" >&6;}
+      as_fn_error $? "A $TOOLCHAIN_TYPE compiler is required. Try setting --with-tools-dir." "$LINENO" 5
+    fi
+    # Remove Copyright and legalese from version string, and
+    # collapse into a single line
+    COMPILER_VERSION_STRING='emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) *.*.* (*)'
+    COMPILER_VERSION_NUMBER='*.*.*'
   elif test  "x$TOOLCHAIN_TYPE" = xclang; then
     # clang --version output typically looks like
     #    Apple LLVM version 5.0 (clang-500.2.79) (based on LLVM 3.3svn)
@@ -38934,7 +39010,7 @@ $as_echo "$as_me: Rewriting OBJDUMP to \"$new_complete\"" >&6;}
 
   if test "x$BUILD_CC" = x; then
     # The variable is not set by user, try to locate tool using the code snippet
-    for ac_prog in clang cl cc gcc
+    for ac_prog in clang cl cc gcc emcc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -38992,7 +39068,7 @@ done
 $as_echo "$as_me: WARNING: Ignoring value of BUILD_CC from the environment. Use command line variables instead." >&2;}
       fi
       # Try to locate tool using the code snippet
-      for ac_prog in clang cl cc gcc
+      for ac_prog in clang cl cc gcc emcc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39120,7 +39196,7 @@ $as_echo "$tool_specified" >&6; }
 
   if test "x$BUILD_CXX" = x; then
     # The variable is not set by user, try to locate tool using the code snippet
-    for ac_prog in clang++ cl CC g++
+    for ac_prog in clang++ cl CC g++ em++
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39178,7 +39254,7 @@ done
 $as_echo "$as_me: WARNING: Ignoring value of BUILD_CXX from the environment. Use command line variables instead." >&2;}
       fi
       # Try to locate tool using the code snippet
-      for ac_prog in clang++ cl CC g++
+      for ac_prog in clang++ cl CC g++ em++
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39308,7 +39384,7 @@ $as_echo "$tool_specified" >&6; }
 
   if test "x$BUILD_CC" = x; then
     # The variable is not set by user, try to locate tool using the code snippet
-    for ac_prog in cl cc gcc
+    for ac_prog in cl cc gcc emcc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39366,7 +39442,7 @@ done
 $as_echo "$as_me: WARNING: Ignoring value of BUILD_CC from the environment. Use command line variables instead." >&2;}
       fi
       # Try to locate tool using the code snippet
-      for ac_prog in cl cc gcc
+      for ac_prog in cl cc gcc emcc
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39501,7 +39577,7 @@ $as_echo "$tool_specified" >&6; }
 
   if test "x$BUILD_CXX" = x; then
     # The variable is not set by user, try to locate tool using the code snippet
-    for ac_prog in cl CC g++
+    for ac_prog in cl CC g++ em++
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -39559,7 +39635,7 @@ done
 $as_echo "$as_me: WARNING: Ignoring value of BUILD_CXX from the environment. Use command line variables instead." >&2;}
       fi
       # Try to locate tool using the code snippet
-      for ac_prog in cl CC g++
+      for ac_prog in cl CC g++ em++
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2
@@ -40784,7 +40860,7 @@ $as_echo "$as_me: Rewriting BUILD_LD to \"$new_complete\"" >&6;}
 
 
 
-  if test  "x$TOOLCHAIN_TYPE" = xclang; then
+  if test "x$TOOLCHAIN_TYPE" = xclang || test "x$TOOLCHAIN_TYPE" = xemscripten; then
     USE_CLANG=true
   fi
 
@@ -42013,6 +42089,8 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
     C_FLAG_DEPS="-MMD -MF"
   elif test "x$TOOLCHAIN_TYPE" = xclang; then
     C_FLAG_DEPS="-MMD -MF"
+  elif test "x$TOOLCHAIN_TYPE" = xemscripten; then
+    C_FLAG_DEPS="-MMD -MF"
   elif test "x$TOOLCHAIN_TYPE" = xsolstudio; then
     C_FLAG_DEPS="-xMMD -xMF"
   elif test "x$TOOLCHAIN_TYPE" = xxlc; then
@@ -42038,6 +42116,9 @@ $as_echo "$ac_cv_c_bigendian" >&6; }
     fi
     ASFLAGS_DEBUG_SYMBOLS="-g"
   elif test "x$TOOLCHAIN_TYPE" = xclang; then
+    CFLAGS_DEBUG_SYMBOLS="-g"
+    CXXFLAGS_DEBUG_SYMBOLS="-g"
+  elif test "x$TOOLCHAIN_TYPE" = xemscripten; then
     CFLAGS_DEBUG_SYMBOLS="-g"
     CXXFLAGS_DEBUG_SYMBOLS="-g"
   elif test "x$TOOLCHAIN_TYPE" = xsolstudio; then
@@ -43494,6 +43575,18 @@ $as_echo_n "checking what is not needed on bsd?... " >&6; }
     ALSA_NOT_NEEDED=yes
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: alsa" >&5
 $as_echo "alsa" >&6; }
+  fi
+
+  if test "x$OPENJDK_TARGET_OS" = xemscripten; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking what is not needed with Emscripten?" >&5
+$as_echo_n "checking what is not needed with Emscripten?... " >&6; }
+    CUPS_NOT_NEEDED=yes
+    X11_NOT_NEEDED=yes
+    FREETYPE_NOT_NEEDED=yes
+    ALSA_NOT_NEEDED=yes
+    FONTCONFIG_NOT_NEEDED=yes
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: cups x11 freetype alsa fontconfig" >&5
+$as_echo "cups x11 freetype alsa fontconfig" >&6; }
   fi
 
   if test "x$OPENJDK" = "xfalse"; then

@@ -76,6 +76,16 @@ AC_DEFUN_ONCE([LIB_SETUP_INIT],
     AC_MSG_RESULT([alsa])
   fi
 
+  if test "x$OPENJDK_TARGET_OS" = xemscripten; then
+    AC_MSG_CHECKING([what is not needed with Emscripten?])
+    CUPS_NOT_NEEDED=yes
+    X11_NOT_NEEDED=yes
+    FREETYPE_NOT_NEEDED=yes
+    ALSA_NOT_NEEDED=yes
+    FONTCONFIG_NOT_NEEDED=yes
+    AC_MSG_RESULT([cups x11 freetype alsa fontconfig])
+  fi
+
   if test "x$OPENJDK" = "xfalse"; then
     FREETYPE_NOT_NEEDED=yes
   fi

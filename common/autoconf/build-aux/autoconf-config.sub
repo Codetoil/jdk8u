@@ -1414,6 +1414,9 @@ case $os in
 	-zvmoe)
 		os=-zvmoe
 		;;
+	-emscripten)
+		os=-emscripten
+		;;
 	-none)
 		;;
 	*)
